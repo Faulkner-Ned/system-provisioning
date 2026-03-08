@@ -1,0 +1,96 @@
+---
+- name: Add Microsoft's GPG key for package validation (VSCode)
+  ansible.builtin.get_url:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    dest: /usr/share/keyrings/microsoft.asc
+  become: yes
+
+- name: Add the VSCode repository
+  ansible.builtin.apt_repository:
+    repo: 'deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.asc] https://packages.microsoft.com/repos/vscode stable main'
+    state: present
+  become: yes
+
+- name: Add Spotify GPG key using gpg
+  ansible.builtin.get_url:
+    url: https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc
+    dest: /etc/apt/keyrings/spotify.gpg
+    mode: '0644'
+  become: yes
+
+- name: Add Spotify repository
+  ansible.builtin.apt_repository:
+    repo: 'deb [signed-by=/etc/apt/keyrings/spotify.gpg] https://repository.spotify.com stable non-free'
+    state: present
+  become: yes
+
+- name: Add Mullvad GPG key for package validation
+  ansible.builtin.get_url:
+    url: https://repository.mullvad.net/deb/mullvad-keyring.asc
+    dest: /usr/share/keyrings/mullvad-keyring.asc
+  become: yes
+
+- name: Add Mullvad repository
+  ansible.builtin.apt_repository:
+    repo: 'deb [signed-by=/usr/share/keyrings/mullvad-keyring.asc] https://repository.mullvad.net/deb/stable stable main'
+    state: present
+  become: yes
+
+- name: Add Ghostly GPG key
+  ansible.builtin.get_url:
+    url: https://debian.griffo.io/EA0F721D231FDD3A0A17B9AC7808B4DD62C41256.asc
+    dest: /etc/apt/keyrings/ghostly.gpg
+    mode: '0644'
+  become: yes
+
+- name: Add Ghostly repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/ghostly.gpg] https://debian.griffo.io/apt {{ codename }} main"
+    state: present
+  become: yes
+
+- name: Download Discord .deb package
+  ansible.builtin.get_url:
+    url: https://discord.com/api/download?platform=linux&format=deb
+    dest: /tmp/discord.deb
+  become: yes
+
+- name: Install Discord from .deb using apt
+  ansible.builtin.apt:
+    deb: /tmp/discord.deb
+    state: present
+  become: yes
+
+- name: Download Bitwarden Desktop .deb package
+  ansible.builtin.get_url:
+    url: "https://bitwarden.com/download/?app=desktop&platform=linux&variant=deb"
+    dest: /tmp/bitwarden123.deb
+  become: yes
+
+- name: Install Bitwarden Desktop .deb package using apt
+  ansible.builtin.apt:
+    deb: /tmp/bitwarden123.deb
+    state: present
+  become: yes
+
+- name: Update apt package cache
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
+
+- name: Install all applications (except Discord and Bitwarden)
+  ansible.builtin.apt:
+    name:
+      - code
+      - spotify-client
+      - ghostty
+      - mullvad-vpn
+      - vim
+      - neovim
+    state: present
+  become: yes
+
+- name: Clean apt cache
+  ansible.builtin.apt:
+    autoclean: yes
+  become: yes

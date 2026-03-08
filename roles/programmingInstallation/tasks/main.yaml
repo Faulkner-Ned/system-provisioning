@@ -1,0 +1,383 @@
+---
+# PYENV Installation
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
+- name: Debug - Show target home directory
+  debug:
+    msg: "Installing pyenv for user home: {{ target_user_home }}"
+
+- name: Check if pyenv is already installed
+  stat:
+    path: "{{ target_user_home }}/.pyenv"
+  register: pyenv_dir_exists
+
+- name: Remove root's conflicting pyenv directory if user pyenv doesn't exist
+  become: yes
+  file:
+    path: "/root/.pyenv"
+    state: absent
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Update apt cache and install pyenv dependencies
+  become: yes
+  apt:
+    name:
+      - make
+      - build-essential
+      - libssl-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - curl
+      - git
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - libxml2-dev
+      - libxmlsec1-dev
+      - libffi-dev
+      - liblzma-dev
+    state: present
+    update_cache: yes
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Run pyenv installer script
+  shell: 'curl -fsSL https://pyenv.run | bash'
+  become_user: "{{ target_user }}"
+  when: not pyenv_dir_exists.stat.exists
+  register: pyenv_install_result
+
+- name: Configure pyenv in bashrc - set PYENV_ROOT
+  lineinfile:
+    path: "{{ target_user_home }}/.bashrc"
+    line: 'export PYENV_ROOT="$HOME/.pyenv"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Configure pyenv in bashrc - add bin to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.bashrc"
+    line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Configure pyenv in bashrc - initialize pyenv
+  lineinfile:
+    path: "{{ target_user_home }}/.bashrc"
+    line: 'eval "$(pyenv init - bash)"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Check if .bash_profile exists
+  stat:
+    path: "{{ target_user_home }}/.bash_profile"
+  register: bash_profile_exists
+  when: not pyenv_dir_exists.stat.exists
+
+- name: Check if .bash_login exists
+  stat:
+    path: "{{ target_user_home }}/.bash_login"
+  register: bash_login_exists
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists
+
+- name: Configure pyenv in bash_profile - set PYENV_ROOT
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_profile"
+    line: 'export PYENV_ROOT="$HOME/.pyenv"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and bash_profile_exists.stat.exists
+
+- name: Configure pyenv in bash_profile - add bin to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_profile"
+    line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and bash_profile_exists.stat.exists
+
+- name: Configure pyenv in bash_profile - initialize pyenv
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_profile"
+    line: 'eval "$(pyenv init - bash)"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and bash_profile_exists.stat.exists
+
+- name: Configure pyenv in bash_login - set PYENV_ROOT
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_login"
+    line: 'export PYENV_ROOT="$HOME/.pyenv"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and bash_login_exists.stat.exists
+
+- name: Configure pyenv in bash_login - add bin to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_login"
+    line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and bash_login_exists.stat.exists
+
+- name: Configure pyenv in bash_login - initialize pyenv
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_login"
+    line: 'eval "$(pyenv init - bash)"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and bash_login_exists.stat.exists
+
+- name: Configure pyenv in profile - set PYENV_ROOT
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export PYENV_ROOT="$HOME/.pyenv"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and not bash_login_exists.stat.exists
+
+- name: Configure pyenv in profile - add bin to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and not bash_login_exists.stat.exists
+
+- name: Configure pyenv in profile - initialize pyenv
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'eval "$(pyenv init - bash)"'
+    create: yes
+    state: present
+  when: not pyenv_dir_exists.stat.exists and not bash_profile_exists.stat.exists and not bash_login_exists.stat.exists
+
+- name: Check if Python {{ python_version }} is already installed
+  shell: |
+    bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    pyenv versions --bare | grep -q "^{{ python_version }}\."'
+  become_user: "{{ target_user }}"
+  register: python_version_exists
+  changed_when: false
+  failed_when: false
+
+- name: Install Python {{ python_version }} using pyenv
+  shell: |
+    bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init - bash)"
+    pyenv install {{ python_version }}'
+  become_user: "{{ target_user }}"
+  register: python_install_result
+  failed_when: false
+  when: python_version_exists.rc != 0
+
+- name: Check if nvm is already installed
+  stat:
+    path: "{{ target_user_home }}/.nvm"
+  register: nvm_dir_exists
+
+- name: Install NVM
+  shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v{{ nvm_version }}/install.sh | bash
+  become_user: "{{ target_user }}"
+  when: not nvm_dir_exists.stat.exists
+  register: nvm_install_result
+
+- name: Configure nvm in bashrc
+  lineinfile:
+    path: "{{ target_user_home }}/.bashrc"
+    line: 'export NVM_DIR="$HOME/.nvm"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists
+
+- name: Configure nvm in bashrc - load nvm
+  lineinfile:
+    path: "{{ target_user_home }}/.bashrc"
+    line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists
+
+- name: Check if .bash_profile exists
+  stat:
+    path: "{{ target_user_home }}/.bash_profile"
+  register: bash_profile_exists_nvm
+  when: not nvm_dir_exists.stat.exists
+
+- name: Check if .bash_login exists
+  stat:
+    path: "{{ target_user_home }}/.bash_login"
+  register: bash_login_exists_nvm
+  when: not nvm_dir_exists.stat.exists and not bash_profile_exists_nvm.stat.exists
+
+- name: Configure nvm in bash_profile
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_profile"
+    line: 'export NVM_DIR="$HOME/.nvm"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and bash_profile_exists_nvm.stat.exists
+
+- name: Configure nvm in bash_profile - load nvm
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_profile"
+    line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and bash_profile_exists_nvm.stat.exists
+
+- name: Configure nvm in bash_login
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_login"
+    line: 'export NVM_DIR="$HOME/.nvm"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and not bash_profile_exists_nvm.stat.exists and bash_login_exists_nvm.stat.exists
+
+- name: Configure nvm in bash_login - load nvm
+  lineinfile:
+    path: "{{ target_user_home }}/.bash_login"
+    line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and not bash_profile_exists_nvm.stat.exists and bash_login_exists_nvm.stat.exists
+
+- name: Configure nvm in profile
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export NVM_DIR="$HOME/.nvm"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and not bash_profile_exists_nvm.stat.exists and not bash_login_exists_nvm.stat.exists
+
+- name: Configure nvm in profile - load nvm
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+    create: yes
+    state: present
+  when: not nvm_dir_exists.stat.exists and not bash_profile_exists_nvm.stat.exists and not bash_login_exists_nvm.stat.exists
+
+- name: Check if Node.js {{ nodejs_version }} is already installed
+  shell: |
+    bash -c 'export NVM_DIR="{{ target_user_home }}/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm ls {{ nodejs_version }} | grep -q "v{{ nodejs_version }}"'
+  become_user: "{{ target_user }}"
+  register: nodejs_version_exists
+  changed_when: false
+  failed_when: false
+
+- name: Install Node.js {{ nodejs_version }} using nvm
+  shell: |
+    bash -c 'export NVM_DIR="{{ target_user_home }}/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm install {{ nodejs_version }}'
+  become_user: "{{ target_user }}"
+  register: nodejs_install_result
+  failed_when: false
+  when: nodejs_version_exists.rc != 0
+
+- name: Check if Go {{ golang_version }} is already installed
+  stat:
+    path: "{{ target_user_home }}/.local/go/go/bin/go"
+  register: golang_installed
+
+- name: Download Go {{ golang_version }}
+  get_url:
+    url: "https://go.dev/dl/go{{ golang_version }}.0.linux-amd64.tar.gz"
+    dest: "/tmp/go{{ golang_version }}.0.linux-amd64.tar.gz"
+    mode: '0644'
+  when: not golang_installed.stat.exists
+
+- name: Create Go installation directory
+  file:
+    path: "{{ target_user_home }}/.local/go"
+    state: directory
+    mode: '0755'
+
+- name: Extract Go {{ golang_version }}
+  unarchive:
+    src: "/tmp/go{{ golang_version }}.0.linux-amd64.tar.gz"
+    dest: "{{ target_user_home }}/.local/go"
+    remote_src: yes
+    creates: "{{ target_user_home }}/.local/go/go"
+  when: not golang_installed.stat.exists
+
+- name: Install Java {{ java_version }} and Maven
+  become: yes
+  apt:
+    name:
+      - "openjdk-{{ java_version }}-jre"
+      - "maven"
+    state: present
+    update_cache: yes
+
+- name: Install pipx
+  become: yes
+  apt:
+    name: "pipx"
+    state: present
+    update_cache: yes
+
+- name: Set Java environment variables
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export JAVA_HOME="/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64"'
+    create: yes
+    state: present
+
+- name: Add Java to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export PATH="$JAVA_HOME/bin:$PATH"'
+    create: yes
+    state: present
+
+- name: Set Go environment variables
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export GOROOT="$HOME/.local/go/go"'
+    create: yes
+    state: present
+
+- name: Set Go PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export PATH="$HOME/.local/go/go/bin:$PATH"'
+    create: yes
+    state: present
+
+- name: Add Go bin to PATH
+  lineinfile:
+    path: "{{ target_user_home }}/.profile"
+    line: 'export PATH="$HOME/go/bin:$PATH"'
+    create: yes
+    state: present
+
+- name: Ensure pipx is in PATH
+  shell: pipx ensurepath
+  become_user: "{{ target_user }}"
+  changed_when: false
+
+

@@ -1,0 +1,10 @@
+---
+- name: Baseline Software Installation
+  hosts: local
+  become: yes
+  roles:
+    - utilityInstallation
+    - applicationsInstallation
+    - programmingInstallation
+    - pipGoPackagesInstallation
+    - devopsInstallation
