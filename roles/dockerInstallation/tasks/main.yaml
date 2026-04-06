@@ -18,19 +18,9 @@
   set_fact:
     docker_expected_version: "{{ k8s_version.split('.')[0] + '.' + ((k8s_version.split('.')[1] | int) - 1) | string }}"
 
-- name: Get expected kubectl version
-  set_fact:
-    kubectl_expected_version: "{{ k8s_version }}"
-
 - name: Check Docker version
   shell: docker --version 2>/dev/null | grep -oP 'Docker version \K[0-9]+\.[0-9]+' || echo "not installed"
   register: docker_version_check
-  changed_when: false
-  failed_when: false
-
-- name: Check kubectl version
-  shell: "kubectl version --client --short 2>/dev/null | grep -oP 'Client Version: v\\K[0-9]+\\.[0-9]+' || echo 'not installed'"
-  register: kubectl_version_check
   changed_when: false
   failed_when: false
 
@@ -38,11 +28,7 @@
   set_fact:
     docker_needed: "{{ docker_version_check.stdout == 'not installed' or docker_version_check.stdout != docker_expected_version }}"
 
-- name: Set kubectl installation needed fact
-  set_fact:
-    kubectl_needed: "{{ kubectl_version_check.stdout == 'not installed' or kubectl_version_check.stdout != kubectl_expected_version }}"
-
-- name: Install Docker and Kubernetes
+- name: Install Docker
   block:
     - name: Install prerequisites for apt over HTTPS
       ansible.builtin.apt:
@@ -68,52 +54,19 @@
         state: present
       become: yes
 
-    - name: Create Kubernetes keyrings directory
-      ansible.builtin.file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
-      become: yes
-
-    - name: Add Kubernetes GPG key
-      ansible.builtin.get_url:
-        url: https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/Release.key
-        dest: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-        mode: '0644'
-      become: yes
-
-    - name: Add Kubernetes repository
-      ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/ /"
-        state: present
-      become: yes
-
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
       become: yes
 
-    - name: Install Docker and Kubernetes packages
+    - name: Install Docker packages
       ansible.builtin.apt:
         name:
           - docker-ce
           - docker-ce-cli
           - containerd.io
           - docker-compose-plugin
-          - kubelet
-          - kubeadm
-          - kubectl
         state: present
-      become: yes
-
-    - name: Hold Kubernetes packages from automatic upgrades
-      ansible.builtin.dpkg_selections:
-        name: "{{ item }}"
-        selection: hold
-      loop:
-        - kubelet
-        - kubeadm
-        - kubectl
       become: yes
 
     - name: Add current user to docker group
@@ -123,17 +76,10 @@
         append: yes
       become: yes
 
-    - name: Configure kubectl bash completion
-      ansible.builtin.lineinfile:
-        path: "{{ target_user_home }}/.bashrc"
-        line: "source <(kubectl completion bash)"
-        create: yes
-      become: no
-
     - name: Ensure Docker service is running
       ansible.builtin.service:
         name: docker
         state: started
         enabled: yes
       become: yes
-  when: docker_needed | bool or kubectl_needed | bool
+  when: docker_needed | bool

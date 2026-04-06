@@ -14,11 +14,11 @@
     target_user_home: "{{ user_home_output.stdout }}"
     target_user: "{{ user_name_output.stdout }}"
 
-- name: Check if Go {{ golang_version }} is already installed
+- name: Check if Go {{ golang_version }} is already installed via mise
   shell: |
-    bash -c 'export PATH="{{ target_user_home }}/.local/go/go/bin:$PATH"
-    go version 2>/dev/null | grep -oP "go{{ golang_version }}"'
-  become_user: "{{ target_user }}"
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- go@{{ golang_version }} -- go version 2>/dev/null'
   register: golang_version_check
   changed_when: false
   failed_when: false
@@ -26,60 +26,13 @@
 
 - name: Set Go installation needed fact
   set_fact:
-    golang_needed: "{{ golang_version_check.rc != 0 or golang_version_check.stdout == '' }}"
+    golang_needed: "{{ golang_version_check.rc != 0 }}"
 
-- name: Check if Go is installed
-  ansible.builtin.stat:
-    path: "{{ target_user_home }}/.local/go/go"
-  register: golang_dir_exists
-
-- name: Install Go
-  block:
-    - name: Remove existing Go if wrong version
-      become_user: "{{ target_user }}"
-      file:
-        path: "{{ target_user_home }}/.local/go"
-        state: absent
-      when: golang_dir_exists.stat.exists
-
-    - name: Download Go {{ golang_version }}
-      get_url:
-        url: "https://go.dev/dl/go{{ golang_version }}.0.linux-amd64.tar.gz"
-        dest: "/tmp/go{{ golang_version }}.0.linux-amd64.tar.gz"
-        mode: '0644'
-        creates: "/tmp/go{{ golang_version }}.0.linux-amd64.tar.gz"
-
-    - name: Create Go installation directory
-      file:
-        path: "{{ target_user_home }}/.local/go"
-        state: directory
-        mode: '0755'
-
-    - name: Extract Go {{ golang_version }}
-      unarchive:
-        src: "/tmp/go{{ golang_version }}.0.linux-amd64.tar.gz"
-        dest: "{{ target_user_home }}/.local/go"
-        remote_src: yes
-        creates: "{{ target_user_home }}/.local/go/go"
-
-    - name: Set Go environment variables
-      lineinfile:
-        path: "{{ target_user_home }}/.profile"
-        line: 'export GOROOT="$HOME/.local/go/go"'
-        create: yes
-        state: present
-
-    - name: Set Go PATH
-      lineinfile:
-        path: "{{ target_user_home }}/.profile"
-        line: 'export PATH="$HOME/.local/go/go/bin:$PATH"'
-        create: yes
-        state: present
-
-    - name: Add Go bin to PATH
-      lineinfile:
-        path: "{{ target_user_home }}/.profile"
-        line: 'export PATH="$HOME/go/bin:$PATH"'
-        create: yes
-        state: present
+- name: Install Go via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install go@{{ golang_version }}'
+  become_user: "{{ target_user }}"
+  failed_when: false
   when: golang_needed | bool

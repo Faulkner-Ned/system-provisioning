@@ -1,20 +1,24 @@
 ---
-- name: Check if Helm is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/helm
-  register: helm_binary
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
 
-- name: Get expected Helm version (major.minor)
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
   set_fact:
-    helm_expected_version: "{{ helm_version.split('.')[0] + '.' + helm_version.split('.')[1] }}"
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
 
 - name: Check Helm version
-  shell: >
-    if helm version --short >/dev/null 2>&1; then
-      helm version --short 2>/dev/null | grep -oP 'v\K[0-9]+\.[0-9]+' || echo "not installed";
-    else
-      echo "not installed";
-    fi
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- helm@{{ helm_version }} -- helm version --short 2>/dev/null | grep -oP 'v\K[0-9]+\.[0-9]+' || echo "not installed"'
   register: helm_version_check
   changed_when: false
   failed_when: false
@@ -22,36 +26,13 @@
 
 - name: Set Helm installation needed fact
   set_fact:
-    helm_needed: "{{ helm_version_check.stdout == 'not installed' or helm_version_check.stdout != helm_expected_version }}"
+    helm_needed: "{{ helm_version_check.stdout == 'not installed' }}"
 
-- name: Install Helm
-  block:
-    - name: Remove existing Helm if wrong version
-      ansible.builtin.file:
-        path: /usr/local/bin/helm
-        state: absent
-      become: yes
-      when: helm_binary.stat.exists
-
-    - name: Download and install Helm
-      ansible.builtin.unarchive:
-        src: https://get.helm.sh/helm-v{{ helm_version }}-linux-amd64.tar.gz
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/linux-amd64/helm
-      become: yes
-
-    - name: Move Helm binary to /usr/local/bin
-      ansible.builtin.copy:
-        src: /tmp/linux-amd64/helm
-        dest: /usr/local/bin/helm
-        remote_src: yes
-        mode: '0755'
-      become: yes
-
-    - name: Clean up Helm temporary files
-      ansible.builtin.file:
-        path: /tmp/linux-amd64
-        state: absent
-      become: yes
-  when: helm_needed | bool
+- name: Install Helm via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install helm@{{ helm_version }}'
+  become_user: "{{ target_user }}"
+  when: helm_needed
+  failed_when: false

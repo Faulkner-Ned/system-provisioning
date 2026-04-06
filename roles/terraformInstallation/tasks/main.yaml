@@ -1,20 +1,24 @@
 ---
-- name: Check if Terraform is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/terraform
-  register: terraform_binary
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
 
-- name: Get expected Terraform version (major.minor)
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
   set_fact:
-    terraform_expected_version: "{{ terraform_version.split('.')[0] + '.' + terraform_version.split('.')[1] }}"
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
 
 - name: Check Terraform version
-  shell: >
-    if terraform --version >/dev/null 2>&1; then
-      terraform --version 2>/dev/null | head -1 | grep -oP 'Terraform v\K[0-9]+\.[0-9]+' || echo "not installed";
-    else
-      echo "not installed";
-    fi
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- terraform@{{ terraform_version }} -- terraform version 2>/dev/null | head -1 | grep -oP 'Terraform v\K[0-9]+\.[0-9]+' || echo "not installed"'
   register: terraform_version_check
   changed_when: false
   failed_when: false
@@ -22,55 +26,13 @@
 
 - name: Set Terraform installation needed fact
   set_fact:
-    terraform_needed: "{{ terraform_version_check.stdout == 'not installed' or terraform_version_check.stdout != terraform_expected_version }}"
+    terraform_needed: "{{ terraform_version_check.stdout == 'not installed' }}"
 
-- name: Install Terraform
-  block:
-    - name: Remove existing Terraform if wrong version
-      ansible.builtin.file:
-        path: /usr/local/bin/terraform
-        state: absent
-      become: yes
-      when: terraform_binary.stat.exists
-
-    - name: Add HashiCorp GPG key
-      ansible.builtin.get_url:
-        url: https://apt.releases.hashicorp.com/gpg
-        dest: /usr/share/keyrings/hashicorp-archive-keyring.gpg
-      become: yes
-      ignore_errors: true
-
-    - name: Add HashiCorp repository
-      ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
-        state: present
-      become: yes
-      ignore_errors: true
-
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-      become: yes
-      ignore_errors: true
-
-    - name: Download Terraform
-      ansible.builtin.get_url:
-        url: https://releases.hashicorp.com/terraform/{{ terraform_version }}/terraform_{{ terraform_version }}_linux_amd64.zip
-        dest: /tmp/terraform.zip
-        creates: /tmp/terraform.zip
-      become: yes
-
-    - name: Install Terraform
-      ansible.builtin.unarchive:
-        src: /tmp/terraform.zip
-        dest: /usr/local/bin
-        remote_src: yes
-        creates: /usr/local/bin/terraform
-      become: yes
-
-    - name: Clean up Terraform temporary files
-      ansible.builtin.file:
-        path: /tmp/terraform.zip
-        state: absent
-      become: yes
-  when: terraform_needed | bool
+- name: Install Terraform via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install terraform@{{ terraform_version }}'
+  become_user: "{{ target_user }}"
+  when: terraform_needed
+  failed_when: false

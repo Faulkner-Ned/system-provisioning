@@ -14,211 +14,58 @@
     target_user_home: "{{ user_home_output.stdout }}"
     target_user: "{{ user_name_output.stdout }}"
 
-- name: Check if pyenv is already installed
-  stat:
-    path: "{{ target_user_home }}/.pyenv"
-  register: pyenv_dir_exists
-
-- name: Check if Python {{ python_version }} is already installed
+- name: Check if Python {{ python_version }} is already installed via mise
   shell: |
-    bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
-    export PATH="$PYENV_ROOT/bin:$PATH"
-    pyenv versions --bare | grep -q "^{{ python_version }}\."'
-  become_user: "{{ target_user }}"
-  register: python_version_exists
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- python@{{ python_version }} -- python --version 2>/dev/null'
+  register: python_version_check
   changed_when: false
   failed_when: false
-  when: pyenv_dir_exists.stat.exists
+  ignore_errors: true
 
-- name: Check if pipx is already installed
-  command: which pipx
+- name: Set Python installation needed fact
+  set_fact:
+    python_needed: "{{ python_version_check.rc != 0 }}"
+
+- name: Check if pipx is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x pipx --help 2>/dev/null'
   register: pipx_check
   changed_when: false
   failed_when: false
   ignore_errors: true
 
-- name: Set installation needed facts
+- name: Set pipx installation needed fact
   set_fact:
-    pyenv_needed: "{{ not pyenv_dir_exists.stat.exists }}"
-    python_needed: "{{ pyenv_dir_exists.stat.exists and (python_version_exists.rc | default(1)) != 0 }}"
     pipx_needed: "{{ pipx_check.rc != 0 }}"
-    reinstall_python: "{{ pyenv_dir_exists.stat.exists and pyenv_dir_exists.stat.exists and (python_version_exists.rc | default(1)) != 0 }}"
 
-- name: Install Python and pyenv
+- name: Install Python and pipx via mise
   block:
-    - name: Remove existing pyenv if exists (for clean reinstall)
-      become_user: "{{ target_user }}"
-      file:
-        path: "{{ target_user_home }}/.pyenv"
-        state: absent
-      when: pyenv_needed
-      ignore_errors: true
-
-    - name: Remove root's conflicting pyenv directory if user pyenv doesn't exist
-      become: yes
-      file:
-        path: "/root/.pyenv"
-        state: absent
-      when: pyenv_needed
-
-    - name: Update apt cache and install pyenv dependencies
-      become: yes
-      apt:
-        name:
-          - make
-          - build-essential
-          - libssl-dev
-          - zlib1g-dev
-          - libbz2-dev
-          - libreadline-dev
-          - libsqlite3-dev
-          - curl
-          - git
-          - libncursesw5-dev
-          - xz-utils
-          - tk-dev
-          - libxml2-dev
-          - libxmlsec1-dev
-          - libffi-dev
-          - liblzma-dev
-        state: present
-        update_cache: yes
-      when: pyenv_needed
-
-    - name: Run pyenv installer script
-      shell: 'curl -fsSL https://pyenv.run | bash'
-      become_user: "{{ target_user }}"
-      when: pyenv_needed
-
-    - name: Configure pyenv in bashrc - set PYENV_ROOT
-      lineinfile:
-        path: "{{ target_user_home }}/.bashrc"
-        line: 'export PYENV_ROOT="$HOME/.pyenv"'
-        create: yes
-        state: present
-      when: pyenv_needed
-
-    - name: Configure pyenv in bashrc - add bin to PATH
-      lineinfile:
-        path: "{{ target_user_home }}/.bashrc"
-        line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
-        create: yes
-        state: present
-      when: pyenv_needed
-
-    - name: Configure pyenv in bashrc - initialize pyenv
-      lineinfile:
-        path: "{{ target_user_home }}/.bashrc"
-        line: 'eval "$(pyenv init - bash)"'
-        create: yes
-        state: present
-      when: pyenv_needed
-
-    - name: Check if .bash_profile exists
-      stat:
-        path: "{{ target_user_home }}/.bash_profile"
-      register: bash_profile_exists
-      when: pyenv_needed
-
-    - name: Check if .bash_login exists
-      stat:
-        path: "{{ target_user_home }}/.bash_login"
-      register: bash_login_exists
-      when: pyenv_needed and not bash_profile_exists.stat.exists
-
-    - name: Configure pyenv in bash_profile
-      block:
-        - name: Configure pyenv in bash_profile - set PYENV_ROOT
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_profile"
-            line: 'export PYENV_ROOT="$HOME/.pyenv"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in bash_profile - add bin to PATH
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_profile"
-            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in bash_profile - initialize pyenv
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_profile"
-            line: 'eval "$(pyenv init - bash)"'
-            create: yes
-            state: present
-      when: pyenv_needed and bash_profile_exists.stat.exists
-
-    - name: Configure pyenv in bash_login
-      block:
-        - name: Configure pyenv in bash_login - set PYENV_ROOT
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_login"
-            line: 'export PYENV_ROOT="$HOME/.pyenv"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in bash_login - add bin to PATH
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_login"
-            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in bash_login - initialize pyenv
-          lineinfile:
-            path: "{{ target_user_home }}/.bash_login"
-            line: 'eval "$(pyenv init - bash)"'
-            create: yes
-            state: present
-      when: pyenv_needed and not bash_profile_exists.stat.exists and bash_login_exists.stat.exists
-
-    - name: Configure pyenv in profile
-      block:
-        - name: Configure pyenv in profile - set PYENV_ROOT
-          lineinfile:
-            path: "{{ target_user_home }}/.profile"
-            line: 'export PYENV_ROOT="$HOME/.pyenv"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in profile - add bin to PATH
-          lineinfile:
-            path: "{{ target_user_home }}/.profile"
-            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
-            create: yes
-            state: present
-
-        - name: Configure pyenv in profile - initialize pyenv
-          lineinfile:
-            path: "{{ target_user_home }}/.profile"
-            line: 'eval "$(pyenv init - bash)"'
-            create: yes
-            state: present
-      when: pyenv_needed and not bash_profile_exists.stat.exists and not bash_login_exists.stat.exists
-
-    - name: Install Python {{ python_version }} using pyenv
+    - name: Install Python {{ python_version }} via mise
       shell: |
-        bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
-        export PATH="$PYENV_ROOT/bin:$PATH"
-        eval "$(pyenv init - bash)"
-        pyenv install {{ python_version }}'
+        bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+        export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+        mise install python@{{ python_version }}'
       become_user: "{{ target_user }}"
-      failed_when: false
       when: python_needed
 
-    - name: Install pipx
-      become: yes
-      apt:
-        name: pipx
-        state: present
-        update_cache: yes
+    - name: Install pipx via mise
+      shell: |
+        bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+        export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+        mise install -g pipx'
+      become_user: "{{ target_user }}"
       when: pipx_needed
 
     - name: Ensure pipx is in PATH
-      shell: pipx ensurepath
+      shell: |
+        bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+        source ~/.profile 2>/dev/null || true
+        pipx ensurepath'
       become_user: "{{ target_user }}"
-      changed_when: false
       when: pipx_needed
-  when: pyenv_needed | bool or python_needed | bool or pipx_needed | bool
+      changed_when: false
+  when: python_needed | bool or pipx_needed | bool

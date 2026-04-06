@@ -4,7 +4,6 @@ chezmoi_version: "2.69.4"
 
 # Programming Languages
 python_version: "3.12"
-nvm_version: "0.40.4"
 nodejs_version: "24.14.0"
 golang_version: "1.26"
 java_version: "21"
@@ -14,3 +13,10 @@ k8s_version: "1.32"
 helm_version: "3.16.4"
 terraform_version: "1.14.6"
 kubectx_version: "0.9.4"
+
+# Mise Packages
+mise_pipx_packages:
+  - aws-mfa
+mise_npm_packages: []
+mise_go_packages:
+  - github.com/gohugoio/hugo@latest

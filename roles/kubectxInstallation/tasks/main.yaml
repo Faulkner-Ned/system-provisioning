@@ -1,6 +1,24 @@
 ---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
 - name: Check kubectx installation
-  command: which kubectx
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    which kubectx 2>/dev/null'
   register: kubectx_check
   changed_when: false
   failed_when: false
@@ -10,12 +28,11 @@
   set_fact:
     kubectx_needed: "{{ kubectx_check.rc != 0 }}"
 
-- name: Install kubectx
-  block:
-    - name: Install kubectx
-      ansible.builtin.apt:
-        name: kubectx
-        state: present
-        update_cache: yes
-      become: yes
-  when: kubectx_needed | bool
+- name: Install kubectx via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install kubectx'
+  become_user: "{{ target_user }}"
+  when: kubectx_needed
+  failed_when: false

@@ -1,62 +1,38 @@
 ---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
 - name: Check AWS CLI version
-  shell: aws --version 2>/dev/null | grep -oP 'aws-cli/\K[0-9]+' || echo "not installed"
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x awscli -- aws --version 2>/dev/null | grep -oP 'aws-cli/\K[0-9]+' || echo "not installed"'
   register: aws_version_check
   changed_when: false
   failed_when: false
+  ignore_errors: true
 
 - name: Set AWS CLI installation needed fact
   set_fact:
-    aws_needed: "{{ aws_version_check.stdout == 'not installed' or aws_version_check.stdout != '2' }}"
+    aws_needed: "{{ aws_version_check.stdout == 'not installed' }}"
 
-- name: Check if AWS CLI is installed
-  ansible.builtin.stat:
-    path: /usr/local/bin/aws
-  register: aws_binary
-
-- name: Install AWS CLI v2
-  block:
-    - name: Remove existing AWS CLI if wrong version
-      ansible.builtin.file:
-        path: /usr/local/bin/aws
-        state: absent
-      become: yes
-      when: aws_binary.stat.exists
-
-    - name: Remove existing AWS CLI installation directory if wrong version
-      ansible.builtin.file:
-        path: /usr/local/aws-cli
-        state: absent
-      become: yes
-      when: aws_binary.stat.exists
-
-    - name: Download AWS CLI v2 installer
-      ansible.builtin.get_url:
-        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
-        dest: /tmp/awscliv2.zip
-        creates: /tmp/awscliv2.zip
-      become: yes
-
-    - name: Unzip AWS CLI v2 installer
-      ansible.builtin.unarchive:
-        src: /tmp/awscliv2.zip
-        dest: /tmp
-        remote_src: yes
-        creates: /tmp/aws
-      become: yes
-
-    - name: Install AWS CLI v2
-      ansible.builtin.command:
-        cmd: /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
-        creates: /usr/local/bin/aws
-      become: yes
-
-    - name: Clean up AWS CLI temporary files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/awscliv2.zip
-        - /tmp/aws
-      become: yes
-  when: aws_needed | bool
+- name: Install AWS CLI via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install -g awscli'
+  become_user: "{{ target_user }}"
+  when: aws_needed
+  failed_when: false

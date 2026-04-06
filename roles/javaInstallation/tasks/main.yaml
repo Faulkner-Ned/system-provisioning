@@ -14,64 +14,48 @@
     target_user_home: "{{ user_home_output.stdout }}"
     target_user: "{{ user_name_output.stdout }}"
 
-- name: Get current Java version
-  shell: java -version 2>&1 | head -1 | grep -oP 'version "(\K[0-9]+)' || echo "not installed"
-  register: java_current_version
+- name: Check if Java {{ java_version }} is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- java@{{ java_version }} -- java -version 2>/dev/null'
+  register: java_version_check
   changed_when: false
   failed_when: false
   ignore_errors: true
 
-- name: Check if Maven is already installed
-  command: which mvn
-  register: mvn_check
+- name: Check if Maven is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x maven -- mvn --version 2>/dev/null'
+  register: maven_check
   changed_when: false
   failed_when: false
   ignore_errors: true
 
 - name: Set installation needed facts
   set_fact:
-    java_needed: "{{ java_current_version.stdout == 'not installed' or java_current_version.stdout != java_version }}"
-    maven_needed: "{{ mvn_check.rc != 0 }}"
-    remove_java: "{{ java_current_version.stdout != 'not installed' and java_current_version.stdout != java_version }}"
+    java_needed: "{{ java_version_check.rc != 0 }}"
+    maven_needed: "{{ maven_check.rc != 0 }}"
 
-- name: Get list of installed OpenJDK packages
-  shell: dpkg -l | grep -oP 'openjdk-[0-9]+-jre' | sed 's/-jre$//' || echo ""
-  register: installed_jdk_versions
-  changed_when: false
-  failed_when: false
-
-- name: Install Java and Maven
+- name: Install Java and Maven via mise
   block:
-    - name: Remove existing Java versions (wrong version)
-      become: yes
-      apt:
-        name: "{{ item }}"
-        state: absent
-        purge: yes
-      loop: "{{ installed_jdk_versions.stdout_lines }}"
-      when: remove_java and installed_jdk_versions.stdout | length > 0
-      ignore_errors: true
+    - name: Install Java {{ java_version }} via mise
+      shell: |
+        bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+        export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+        mise install java@{{ java_version }}'
+      become_user: "{{ target_user }}"
+      when: java_needed
+      failed_when: false
 
-    - name: Install Java {{ java_version }} and Maven
-      become: yes
-      apt:
-        name:
-          - "openjdk-{{ java_version }}-jre"
-          - "maven"
-        state: present
-        update_cache: yes
-
-    - name: Set Java environment variables
-      lineinfile:
-        path: "{{ target_user_home }}/.profile"
-        line: 'export JAVA_HOME="/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64"'
-        create: yes
-        state: present
-
-    - name: Add Java to PATH
-      lineinfile:
-        path: "{{ target_user_home }}/.profile"
-        line: 'export PATH="$JAVA_HOME/bin:$PATH"'
-        create: yes
-        state: present
+    - name: Install Maven via mise
+      shell: |
+        bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+        export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+        mise install -g maven'
+      become_user: "{{ target_user }}"
+      when: maven_needed
+      failed_when: false
   when: java_needed | bool or maven_needed | bool
