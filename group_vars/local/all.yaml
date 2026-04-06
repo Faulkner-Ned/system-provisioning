@@ -1,16 +1,16 @@
 # group_vars/local/all.yaml
-codename: "trixie"
+os_codename: "trixie"
 chezmoi_version: "2.69.4"
 
 # Programming Languages
 python_version: "3.12"
 nvm_version: "0.40.4"
-nodejs_version: "24.14.4"
+nodejs_version: "24.14.0"
 golang_version: "1.26"
 java_version: "21"
 
 # DevOps Tools
 k8s_version: "1.32"
 helm_version: "3.16.4"
-terraform_version: "1.2.6"
+terraform_version: "1.14.6"
 kubectx_version: "0.9.4"

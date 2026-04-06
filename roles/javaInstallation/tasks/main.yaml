@@ -1,0 +1,77 @@
+---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
+- name: Get current Java version
+  shell: java -version 2>&1 | head -1 | grep -oP 'version "(\K[0-9]+)' || echo "not installed"
+  register: java_current_version
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Check if Maven is already installed
+  command: which mvn
+  register: mvn_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set installation needed facts
+  set_fact:
+    java_needed: "{{ java_current_version.stdout == 'not installed' or java_current_version.stdout != java_version }}"
+    maven_needed: "{{ mvn_check.rc != 0 }}"
+    remove_java: "{{ java_current_version.stdout != 'not installed' and java_current_version.stdout != java_version }}"
+
+- name: Get list of installed OpenJDK packages
+  shell: dpkg -l | grep -oP 'openjdk-[0-9]+-jre' | sed 's/-jre$//' || echo ""
+  register: installed_jdk_versions
+  changed_when: false
+  failed_when: false
+
+- name: Install Java and Maven
+  block:
+    - name: Remove existing Java versions (wrong version)
+      become: yes
+      apt:
+        name: "{{ item }}"
+        state: absent
+        purge: yes
+      loop: "{{ installed_jdk_versions.stdout_lines }}"
+      when: remove_java and installed_jdk_versions.stdout | length > 0
+      ignore_errors: true
+
+    - name: Install Java {{ java_version }} and Maven
+      become: yes
+      apt:
+        name:
+          - "openjdk-{{ java_version }}-jre"
+          - "maven"
+        state: present
+        update_cache: yes
+
+    - name: Set Java environment variables
+      lineinfile:
+        path: "{{ target_user_home }}/.profile"
+        line: 'export JAVA_HOME="/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64"'
+        create: yes
+        state: present
+
+    - name: Add Java to PATH
+      lineinfile:
+        path: "{{ target_user_home }}/.profile"
+        line: 'export PATH="$JAVA_HOME/bin:$PATH"'
+        create: yes
+        state: present
+  when: java_needed | bool or maven_needed | bool

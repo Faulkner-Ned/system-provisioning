@@ -5,6 +5,13 @@
   roles:
     - utilityInstallation
     - applicationsInstallation
-    - programmingInstallation
+    - pythonInstallation
+    - nodejsInstallation
+    - goInstallation
+    - javaInstallation
+    - dockerInstallation
+    - helmInstallation
+    - awscliInstallation
+    - terraformInstallation
+    - kubectxInstallation
     - pipGoPackagesInstallation
-    - devopsInstallation

@@ -45,7 +45,7 @@
 
 - name: Add Ghostly repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/ghostly.gpg] https://debian.griffo.io/apt {{ codename }} main"
+    repo: "deb [signed-by=/etc/apt/keyrings/ghostly.gpg] https://debian.griffo.io/apt {{ os_codename }} main"
     state: present
   become: yes
 

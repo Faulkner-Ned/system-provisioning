@@ -1,0 +1,21 @@
+---
+- name: Check kubectx installation
+  command: which kubectx
+  register: kubectx_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set kubectx installation needed fact
+  set_fact:
+    kubectx_needed: "{{ kubectx_check.rc != 0 }}"
+
+- name: Install kubectx
+  block:
+    - name: Install kubectx
+      ansible.builtin.apt:
+        name: kubectx
+        state: present
+        update_cache: yes
+      become: yes
+  when: kubectx_needed | bool

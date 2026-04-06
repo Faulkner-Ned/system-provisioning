@@ -1,0 +1,142 @@
+---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
+- name: Check if nvm is already installed
+  stat:
+    path: "{{ target_user_home }}/.nvm"
+  register: nvm_dir_exists
+
+- name: Check if Node.js {{ nodejs_version }} is already installed
+  shell: |
+    bash -c 'export NVM_DIR="{{ target_user_home }}/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    nvm ls {{ nodejs_version }} | grep -q "v{{ nodejs_version }}"'
+  become_user: "{{ target_user }}"
+  register: nodejs_version_exists
+  changed_when: false
+  failed_when: false
+  when: nvm_dir_exists.stat.exists
+
+- name: Set installation needed facts
+  set_fact:
+    nvm_needed: "{{ not nvm_dir_exists.stat.exists }}"
+    nodejs_needed: "{{ nvm_dir_exists.stat.exists and (nodejs_version_exists.rc | default(1)) != 0 }}"
+
+- name: Install Node.js and nvm
+  block:
+    - name: Remove existing nvm if exists (for clean reinstall)
+      become_user: "{{ target_user }}"
+      file:
+        path: "{{ target_user_home }}/.nvm"
+        state: absent
+      when: nvm_needed
+      ignore_errors: true
+
+    - name: Install NVM
+      shell: |
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v{{ nvm_version }}/install.sh | bash
+      become_user: "{{ target_user }}"
+      when: nvm_needed
+
+    - name: Configure nvm in bashrc
+      block:
+        - name: Configure nvm in bashrc
+          lineinfile:
+            path: "{{ target_user_home }}/.bashrc"
+            line: 'export NVM_DIR="$HOME/.nvm"'
+            create: yes
+            state: present
+
+        - name: Configure nvm in bashrc - load nvm
+          lineinfile:
+            path: "{{ target_user_home }}/.bashrc"
+            line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+            create: yes
+            state: present
+      when: nvm_needed
+
+    - name: Check if .bash_profile exists
+      stat:
+        path: "{{ target_user_home }}/.bash_profile"
+      register: bash_profile_exists_nvm
+      when: nvm_needed
+
+    - name: Check if .bash_login exists
+      stat:
+        path: "{{ target_user_home }}/.bash_login"
+      register: bash_login_exists_nvm
+      when: nvm_needed and not bash_profile_exists_nvm.stat.exists
+
+    - name: Configure nvm in bash_profile
+      block:
+        - name: Configure nvm in bash_profile
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_profile"
+            line: 'export NVM_DIR="$HOME/.nvm"'
+            create: yes
+            state: present
+
+        - name: Configure nvm in bash_profile - load nvm
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_profile"
+            line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+            create: yes
+            state: present
+      when: nvm_needed and bash_profile_exists_nvm.stat.exists
+
+    - name: Configure nvm in bash_login
+      block:
+        - name: Configure nvm in bash_login
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_login"
+            line: 'export NVM_DIR="$HOME/.nvm"'
+            create: yes
+            state: present
+
+        - name: Configure nvm in bash_login - load nvm
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_login"
+            line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+            create: yes
+            state: present
+      when: nvm_needed and not bash_profile_exists_nvm.stat.exists and bash_login_exists_nvm.stat.exists
+
+    - name: Configure nvm in profile
+      block:
+        - name: Configure nvm in profile
+          lineinfile:
+            path: "{{ target_user_home }}/.profile"
+            line: 'export NVM_DIR="$HOME/.nvm"'
+            create: yes
+            state: present
+
+        - name: Configure nvm in profile - load nvm
+          lineinfile:
+            path: "{{ target_user_home }}/.profile"
+            line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+            create: yes
+            state: present
+      when: nvm_needed and not bash_profile_exists_nvm.stat.exists and not bash_login_exists_nvm.stat.exists
+
+    - name: Install Node.js {{ nodejs_version }} using nvm
+      shell: |
+        bash -c 'export NVM_DIR="{{ target_user_home }}/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        nvm install {{ nodejs_version }}'
+      become_user: "{{ target_user }}"
+      failed_when: false
+      when: nodejs_needed
+  when: nvm_needed | bool or nodejs_needed | bool

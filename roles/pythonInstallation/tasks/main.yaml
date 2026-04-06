@@ -1,0 +1,224 @@
+---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"
+
+- name: Check if pyenv is already installed
+  stat:
+    path: "{{ target_user_home }}/.pyenv"
+  register: pyenv_dir_exists
+
+- name: Check if Python {{ python_version }} is already installed
+  shell: |
+    bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    pyenv versions --bare | grep -q "^{{ python_version }}\."'
+  become_user: "{{ target_user }}"
+  register: python_version_exists
+  changed_when: false
+  failed_when: false
+  when: pyenv_dir_exists.stat.exists
+
+- name: Check if pipx is already installed
+  command: which pipx
+  register: pipx_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set installation needed facts
+  set_fact:
+    pyenv_needed: "{{ not pyenv_dir_exists.stat.exists }}"
+    python_needed: "{{ pyenv_dir_exists.stat.exists and (python_version_exists.rc | default(1)) != 0 }}"
+    pipx_needed: "{{ pipx_check.rc != 0 }}"
+    reinstall_python: "{{ pyenv_dir_exists.stat.exists and pyenv_dir_exists.stat.exists and (python_version_exists.rc | default(1)) != 0 }}"
+
+- name: Install Python and pyenv
+  block:
+    - name: Remove existing pyenv if exists (for clean reinstall)
+      become_user: "{{ target_user }}"
+      file:
+        path: "{{ target_user_home }}/.pyenv"
+        state: absent
+      when: pyenv_needed
+      ignore_errors: true
+
+    - name: Remove root's conflicting pyenv directory if user pyenv doesn't exist
+      become: yes
+      file:
+        path: "/root/.pyenv"
+        state: absent
+      when: pyenv_needed
+
+    - name: Update apt cache and install pyenv dependencies
+      become: yes
+      apt:
+        name:
+          - make
+          - build-essential
+          - libssl-dev
+          - zlib1g-dev
+          - libbz2-dev
+          - libreadline-dev
+          - libsqlite3-dev
+          - curl
+          - git
+          - libncursesw5-dev
+          - xz-utils
+          - tk-dev
+          - libxml2-dev
+          - libxmlsec1-dev
+          - libffi-dev
+          - liblzma-dev
+        state: present
+        update_cache: yes
+      when: pyenv_needed
+
+    - name: Run pyenv installer script
+      shell: 'curl -fsSL https://pyenv.run | bash'
+      become_user: "{{ target_user }}"
+      when: pyenv_needed
+
+    - name: Configure pyenv in bashrc - set PYENV_ROOT
+      lineinfile:
+        path: "{{ target_user_home }}/.bashrc"
+        line: 'export PYENV_ROOT="$HOME/.pyenv"'
+        create: yes
+        state: present
+      when: pyenv_needed
+
+    - name: Configure pyenv in bashrc - add bin to PATH
+      lineinfile:
+        path: "{{ target_user_home }}/.bashrc"
+        line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+        create: yes
+        state: present
+      when: pyenv_needed
+
+    - name: Configure pyenv in bashrc - initialize pyenv
+      lineinfile:
+        path: "{{ target_user_home }}/.bashrc"
+        line: 'eval "$(pyenv init - bash)"'
+        create: yes
+        state: present
+      when: pyenv_needed
+
+    - name: Check if .bash_profile exists
+      stat:
+        path: "{{ target_user_home }}/.bash_profile"
+      register: bash_profile_exists
+      when: pyenv_needed
+
+    - name: Check if .bash_login exists
+      stat:
+        path: "{{ target_user_home }}/.bash_login"
+      register: bash_login_exists
+      when: pyenv_needed and not bash_profile_exists.stat.exists
+
+    - name: Configure pyenv in bash_profile
+      block:
+        - name: Configure pyenv in bash_profile - set PYENV_ROOT
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_profile"
+            line: 'export PYENV_ROOT="$HOME/.pyenv"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in bash_profile - add bin to PATH
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_profile"
+            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in bash_profile - initialize pyenv
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_profile"
+            line: 'eval "$(pyenv init - bash)"'
+            create: yes
+            state: present
+      when: pyenv_needed and bash_profile_exists.stat.exists
+
+    - name: Configure pyenv in bash_login
+      block:
+        - name: Configure pyenv in bash_login - set PYENV_ROOT
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_login"
+            line: 'export PYENV_ROOT="$HOME/.pyenv"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in bash_login - add bin to PATH
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_login"
+            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in bash_login - initialize pyenv
+          lineinfile:
+            path: "{{ target_user_home }}/.bash_login"
+            line: 'eval "$(pyenv init - bash)"'
+            create: yes
+            state: present
+      when: pyenv_needed and not bash_profile_exists.stat.exists and bash_login_exists.stat.exists
+
+    - name: Configure pyenv in profile
+      block:
+        - name: Configure pyenv in profile - set PYENV_ROOT
+          lineinfile:
+            path: "{{ target_user_home }}/.profile"
+            line: 'export PYENV_ROOT="$HOME/.pyenv"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in profile - add bin to PATH
+          lineinfile:
+            path: "{{ target_user_home }}/.profile"
+            line: '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"'
+            create: yes
+            state: present
+
+        - name: Configure pyenv in profile - initialize pyenv
+          lineinfile:
+            path: "{{ target_user_home }}/.profile"
+            line: 'eval "$(pyenv init - bash)"'
+            create: yes
+            state: present
+      when: pyenv_needed and not bash_profile_exists.stat.exists and not bash_login_exists.stat.exists
+
+    - name: Install Python {{ python_version }} using pyenv
+      shell: |
+        bash -c 'export PYENV_ROOT="{{ target_user_home }}/.pyenv"
+        export PATH="$PYENV_ROOT/bin:$PATH"
+        eval "$(pyenv init - bash)"
+        pyenv install {{ python_version }}'
+      become_user: "{{ target_user }}"
+      failed_when: false
+      when: python_needed
+
+    - name: Install pipx
+      become: yes
+      apt:
+        name: pipx
+        state: present
+        update_cache: yes
+      when: pipx_needed
+
+    - name: Ensure pipx is in PATH
+      shell: pipx ensurepath
+      become_user: "{{ target_user }}"
+      changed_when: false
+      when: pipx_needed
+  when: pyenv_needed | bool or python_needed | bool or pipx_needed | bool
