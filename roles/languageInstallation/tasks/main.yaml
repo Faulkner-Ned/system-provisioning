@@ -1,0 +1,181 @@
+---
+- name: Get actual user home directory
+  import_tasks: ../_common/tasks/user_lookup.yaml
+
+- name: Check if Python is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- python@{{ python_version }} -- python --version 2>/dev/null'
+  register: python_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Python installation needed fact
+  set_fact:
+    python_needed: "{{ python_version_check.rc != 0 }}"
+
+- name: Check if Node.js is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- node@{{ nodejs_version }} -- node --version 2>/dev/null'
+  register: nodejs_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Node.js installation needed fact
+  set_fact:
+    nodejs_needed: "{{ nodejs_version_check.rc != 0 }}"
+
+- name: Check if Go is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- go@{{ golang_version }} -- go version 2>/dev/null'
+  register: golang_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Go installation needed fact
+  set_fact:
+    golang_needed: "{{ golang_version_check.rc != 0 }}"
+
+- name: Check if Java is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- java@{{ java_version }} -- java -version 2>/dev/null'
+  register: java_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Java installation needed fact
+  set_fact:
+    java_needed: "{{ java_version_check.rc != 0 }}"
+
+- name: Check if Maven is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x maven -- mvn --version 2>/dev/null'
+  register: maven_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Maven installation needed fact
+  set_fact:
+    maven_needed: "{{ maven_check.rc != 0 }}"
+
+- name: Check if pipx is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x pipx --help 2>/dev/null'
+  register: pipx_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set pipx installation needed fact
+  set_fact:
+    pipx_needed: "{{ pipx_check.rc != 0 }}"
+
+- name: Install Python via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install python@{{ python_version }}'
+  become_user: "{{ target_user }}"
+  when: python_needed
+  failed_when: false
+
+- name: Install Node.js via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install node@{{ nodejs_version }}'
+  become_user: "{{ target_user }}"
+  when: nodejs_needed
+  failed_when: false
+
+- name: Install Go via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install go@{{ golang_version }}'
+  become_user: "{{ target_user }}"
+  when: golang_needed
+  failed_when: false
+
+- name: Install Java via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install java@{{ java_version }}'
+  become_user: "{{ target_user }}"
+  when: java_needed
+  failed_when: false
+
+- name: Install Maven via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install -g maven'
+  become_user: "{{ target_user }}"
+  when: maven_needed
+  failed_when: false
+
+- name: Install pipx via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install -g pipx'
+  become_user: "{{ target_user }}"
+  when: pipx_needed
+  failed_when: false
+
+- name: Ensure pipx is in PATH
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    source ~/.profile 2>/dev/null || true
+    pipx ensurepath'
+  become_user: "{{ target_user }}"
+  when: pipx_needed
+  changed_when: false
+
+- name: Install pipx packages via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x pipx install {{ item }}'
+  become_user: "{{ target_user }}"
+  loop: "{{ mise_pipx_packages }}"
+  when: mise_pipx_packages | length > 0
+  failed_when: false
+
+- name: Install npm global packages via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x npm install -g {{ item }}'
+  become_user: "{{ target_user }}"
+  loop: "{{ mise_npm_packages }}"
+  when: mise_npm_packages | length > 0
+  failed_when: false
+
+- name: Install go packages via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    export PATH="$HOME/go/bin:$PATH"
+    CGO_ENABLED=1 go install {{ item }}'
+  become_user: "{{ target_user }}"
+  loop: "{{ mise_go_packages }}"
+  when: mise_go_packages | length > 0
+  failed_when: false

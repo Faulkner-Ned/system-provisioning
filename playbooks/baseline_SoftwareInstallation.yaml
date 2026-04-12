@@ -3,17 +3,9 @@
   hosts: local
   become: yes
   roles:
+    - miseInstallation
     - utilityInstallation
     - applicationsInstallation
-    - miseInstallation
-    - pythonInstallation
-    - nodejsInstallation
-    - goInstallation
-    - javaInstallation
+    - languageInstallation
+    - devopsCliInstallation
     - dockerInstallation
-    - kubectlInstallation
-    - terraformInstallation
-    - helmInstallation
-    - kubectxInstallation
-    - awscliInstallation
-    - misePackagesInstallation

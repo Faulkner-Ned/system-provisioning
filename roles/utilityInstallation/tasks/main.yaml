@@ -1,15 +1,29 @@
 ---
-- name: Download Chezmoi .deb package
-  ansible.builtin.get_url:
-    url: https://github.com/twpayne/chezmoi/releases/download/v{{ chezmoi_version }}/chezmoi_{{ chezmoi_version }}_linux_amd64.deb
-    dest: /tmp/chezmoi.deb
-  become: yes
+- name: Get actual user home directory
+  import_tasks: ../_common/tasks/user_lookup.yaml
 
-- name: Install Chezmoi from .deb using apt
-  ansible.builtin.apt:
-    deb: /tmp/chezmoi.deb
-    state: present
-  become: yes
+- name: Check if chezmoi is already installed via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x chezmoi -- chezmoi --version 2>/dev/null || echo "not installed"'
+  register: chezmoi_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set chezmoi installation needed fact
+  set_fact:
+    chezmoi_needed: "{{ chezmoi_check.stdout == 'not installed' }}"
+
+- name: Install chezmoi via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install -g chezmoi'
+  become_user: "{{ target_user }}"
+  when: chezmoi_needed
+  failed_when: false
 
 - name: Update apt package cache
   ansible.builtin.apt:

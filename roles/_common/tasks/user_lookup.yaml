@@ -1,0 +1,15 @@
+---
+- name: Get actual user home directory
+  shell: "echo ${SUDO_USER:-$USER} | xargs -I {} getent passwd {} | cut -d: -f6"
+  register: user_home_output
+  changed_when: false
+
+- name: Get actual username
+  shell: "echo ${SUDO_USER:-$USER}"
+  register: user_name_output
+  changed_when: false
+
+- name: Set user home directory fact
+  set_fact:
+    target_user_home: "{{ user_home_output.stdout }}"
+    target_user: "{{ user_name_output.stdout }}"

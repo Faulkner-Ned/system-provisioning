@@ -1,0 +1,118 @@
+---
+- name: Get actual user home directory
+  import_tasks: ../_common/tasks/user_lookup.yaml
+
+- name: Check kubectl version
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- kubectl@{{ k8s_version }} -- kubectl version --client --short 2>/dev/null | grep -oP "v\K[0-9]+\.[0-9]+" || echo "not installed"'
+  register: kubectl_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set kubectl installation needed fact
+  set_fact:
+    kubectl_needed: "{{ kubectl_version_check.stdout == 'not installed' }}"
+
+- name: Check Helm version
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- helm@{{ helm_version }} -- helm version --short 2>/dev/null | grep -oP 'v\K[0-9]+\.[0-9]+' || echo "not installed"'
+  register: helm_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Helm installation needed fact
+  set_fact:
+    helm_needed: "{{ helm_version_check.stdout == 'not installed' }}"
+
+- name: Check Terraform version
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise exec -- terraform@{{ terraform_version }} -- terraform version 2>/dev/null | head -1 | grep -oP 'Terraform v\K[0-9]+\.[0-9]+' || echo "not installed"'
+  register: terraform_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set Terraform installation needed fact
+  set_fact:
+    terraform_needed: "{{ terraform_version_check.stdout == 'not installed' }}"
+
+- name: Check kubectx installation
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    which kubectx 2>/dev/null'
+  register: kubectx_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set kubectx installation needed fact
+  set_fact:
+    kubectx_needed: "{{ kubectx_check.rc != 0 }}"
+
+- name: Check AWS CLI version
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise x awscli -- aws --version 2>/dev/null | grep -oP 'aws-cli/\K[0-9]+' || echo "not installed"'
+  register: aws_version_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+
+- name: Set AWS CLI installation needed fact
+  set_fact:
+    aws_needed: "{{ aws_version_check.stdout == 'not installed' }}"
+
+- name: Install kubectl via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install kubectl@{{ k8s_version }}'
+  become_user: "{{ target_user }}"
+  when: kubectl_needed
+  failed_when: false
+
+- name: Install Helm via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install helm@{{ helm_version }}'
+  become_user: "{{ target_user }}"
+  when: helm_needed
+  failed_when: false
+
+- name: Install Terraform via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install terraform@{{ terraform_version }}'
+  become_user: "{{ target_user }}"
+  when: terraform_needed
+  failed_when: false
+
+- name: Install kubectx via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install kubectx'
+  become_user: "{{ target_user }}"
+  when: kubectx_needed
+  failed_when: false
+
+- name: Install AWS CLI via mise
+  shell: |
+    bash -c 'source /etc/profile.d/mise.sh 2>/dev/null || true
+    export MISE_DATA_DIR="{{ target_user_home }}/.local/share/mise"
+    mise install -g awscli'
+  become_user: "{{ target_user }}"
+  when: aws_needed
+  failed_when: false
