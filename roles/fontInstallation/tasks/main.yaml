@@ -1,0 +1,28 @@
+---
+- name: Create system fonts directory
+  file:
+    path: /usr/share/fonts
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Download JetBrains Mono
+  unarchive:
+    src: https://download.jetbrains.com/fonts/JetBrainsMono-2.304.zip
+    dest: /usr/share/fonts
+    remote_src: yes
+    creates: /usr/share/fonts/JetBrainsMono-2.304
+  become: yes
+
+- name: Download Fira Code Nerd Font
+  unarchive:
+    src: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.zip
+    dest: /usr/share/fonts
+    remote_src: yes
+    creates: /usr/share/fonts/FiraCode
+  become: yes
+
+- name: Refresh font cache
+  command: fc-cache -fv
+  become: yes
+  changed_when: false
