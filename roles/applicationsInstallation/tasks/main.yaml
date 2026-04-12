@@ -78,7 +78,7 @@
     update_cache: yes
   become: yes
 
-- name: Install all applications (except Discord and Bitwarden)
+- name: Install all applications
   ansible.builtin.apt:
     name:
       - code

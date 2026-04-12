@@ -1,73 +1,53 @@
 ---
-- name: Get actual user home directory
-  import_tasks: ../_common/tasks/user_lookup.yaml
+- name: Install prerequisites for apt over HTTPS
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+  become: yes
 
-- name: Get expected Docker version (k8s_version - 1 minor)
-  set_fact:
-    docker_expected_version: "{{ k8s_version.split('.')[0] + '.' + ((k8s_version.split('.')[1] | int) - 1) | string }}"
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/debian/gpg
+    dest: /usr/share/keyrings/docker-archive-keyring.gpg
+  become: yes
 
-- name: Check Docker version
-  shell: docker --version 2>/dev/null | grep -oP 'Docker version \K[0-9]+\.[0-9]+' || echo "not installed"
-  register: docker_version_check
-  changed_when: false
-  failed_when: false
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+    state: present
+  become: yes
 
-- name: Set Docker installation needed fact
-  set_fact:
-    docker_needed: "{{ docker_version_check.stdout == 'not installed' or docker_version_check.stdout != docker_expected_version }}"
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
 
-- name: Install Docker
-  block:
-    - name: Install prerequisites for apt over HTTPS
-      ansible.builtin.apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - gnupg
-          - lsb-release
-        state: present
-        update_cache: yes
-      become: yes
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+  become: yes
 
-    - name: Add Docker GPG key
-      ansible.builtin.get_url:
-        url: https://download.docker.com/linux/debian/gpg
-        dest: /usr/share/keyrings/docker-archive-keyring.gpg
-      become: yes
+- name: Add current user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user_id }}"
+    groups: docker
+    append: yes
+  become: yes
 
-    - name: Add Docker repository
-      ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
-        state: present
-      become: yes
-
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-      become: yes
-
-    - name: Install Docker packages
-      ansible.builtin.apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-compose-plugin
-        state: present
-      become: yes
-
-    - name: Add current user to docker group
-      ansible.builtin.user:
-        name: "{{ ansible_user_id }}"
-        groups: docker
-        append: yes
-      become: yes
-
-    - name: Ensure Docker service is running
-      ansible.builtin.service:
-        name: docker
-        state: started
-        enabled: yes
-      become: yes
-  when: docker_needed | bool
+- name: Ensure Docker service is running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: yes
+  become: yes

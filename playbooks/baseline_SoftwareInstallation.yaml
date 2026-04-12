@@ -3,9 +3,6 @@
   hosts: local
   become: yes
   roles:
-    - miseInstallation
     - utilityInstallation
     - applicationsInstallation
-    - languageInstallation
-    - devopsCliInstallation
     - dockerInstallation
