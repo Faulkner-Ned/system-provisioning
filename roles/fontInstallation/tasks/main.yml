@@ -1,0 +1,19 @@
+---
+- name: Create system fonts directory
+  file:
+    path: /usr/share/fonts
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Download Lilex
+  unarchive:
+    src: https://github.com/mishamyrt/Lilex/releases/download/2.700/Lilex.zip
+    dest: /usr/share/fonts
+    remote_src: yes
+  become: true
+
+- name: Refresh font cache
+  command: fc-cache -fv
+  become: true
+  changed_when: false

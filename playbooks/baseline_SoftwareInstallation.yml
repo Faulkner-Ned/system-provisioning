@@ -1,7 +1,7 @@
 ---
 - name: Baseline Software Installation
   hosts: local
-  become: yes
+  become: true
   roles:
     - utilityInstallation
     - applicationsInstallation

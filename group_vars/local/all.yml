@@ -1,0 +1,2 @@
+# group_vars/local/all.yml
+os_codename: "trixie"

@@ -9,24 +9,24 @@
       - lsb-release
     state: present
     update_cache: yes
-  become: yes
+  become: true
 
 - name: Add Docker GPG key
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/debian/gpg
     dest: /usr/share/keyrings/docker-archive-keyring.gpg
-  become: yes
+  become: true
 
 - name: Add Docker repository
   ansible.builtin.apt_repository:
     repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
     state: present
-  become: yes
+  become: true
 
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: yes
-  become: yes
+  become: true
 
 - name: Install Docker packages
   ansible.builtin.apt:
@@ -36,18 +36,18 @@
       - containerd.io
       - docker-compose-plugin
     state: present
-  become: yes
+  become: true
 
 - name: Add current user to docker group
   ansible.builtin.user:
     name: "{{ ansible_user_id }}"
     groups: docker
     append: yes
-  become: yes
+  become: true
 
 - name: Ensure Docker service is running
   ansible.builtin.service:
     name: docker
     state: started
     enabled: yes
-  become: yes
+  become: true

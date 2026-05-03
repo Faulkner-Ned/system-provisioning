@@ -6,64 +6,56 @@
       - gpg
     state: present
     update_cache: yes
-  become: yes
+  become: true
 
 - name: Add Mise GPG key
   ansible.builtin.get_url:
     url: https://mise.jdx.dev/gpg-key.pub
     dest: /etc/apt/keyrings/mise-archive-keyring.asc
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Add Mise repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.asc] https://mise.jdx.dev/deb stable main"
     state: present
-  become: yes
-
-## TEMP REMOVE ONCE CHEZMOI Works
-- name: Add mise activation to bashrc
-  lineinfile:
-    path: "/home/{{ ansible_user_id }}/.bashrc"
-    line: 'eval "$(~/.local/bin/mise activate bash)"'
-    create: yes
-  become_user: "{{ ansible_user_id }}"
-  failed_when: false
+  become: true
 
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: yes
-  become: yes
+  become: true
 
 - name: Install mise
   ansible.builtin.apt:
     name: mise
     state: present
-  become: yes
+  become: true
 
 - name: Download chezmoi .deb package
   ansible.builtin.get_url:
     url: "https://github.com/twpayne/chezmoi/releases/download/v{{ chezmoi_version }}/chezmoi_{{ chezmoi_version }}_linux_amd64.deb"
     dest: /tmp/chezmoi.deb
-  become: yes
+  become: true
 
 - name: Install chezmoi from .deb
   ansible.builtin.apt:
     deb: /tmp/chezmoi.deb
     state: present
-  become: yes
+  become: true
 
 - name: Install utility packages
   ansible.builtin.apt:
     name:
       - wget
-      - starship
       - tmux
       - tree
+      - fd-find
+      - jq
     state: present
-  become: yes
+  become: true
 
 - name: Clean apt cache
   ansible.builtin.apt:
     autoclean: yes
-  become: yes
+  become: true
