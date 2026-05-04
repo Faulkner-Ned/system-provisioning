@@ -6,11 +6,19 @@
     mode: "0755"
   become: true
 
-- name: Download Lilex
+- name: Download Lilex archive
+  get_url:
+    url: https://github.com/mishamyrt/Lilex/releases/download/2.700/Lilex.zip
+    dest: /tmp/Lilex.zip
+    mode: "0644"
+  become: true
+
+- name: Extract Lilex
   unarchive:
-    src: https://github.com/mishamyrt/Lilex/releases/download/2.700/Lilex.zip
+    src: /tmp/Lilex.zip
     dest: /usr/share/fonts
     remote_src: yes
+    creates: /usr/share/fonts/Lilex
   become: true
 
 - name: Refresh font cache
